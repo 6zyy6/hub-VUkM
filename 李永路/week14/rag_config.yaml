@@ -1,0 +1,31 @@
+# RAG 系统配置文件
+
+# 嵌入模型配置
+embedding:
+  model_name: "BAAI/bge-small-zh-v1.5"  # HuggingFace 嵌入模型
+  model_kwargs:
+    device: "cpu"  # 使用 "cuda" 如果有 GPU
+  encode_kwargs:
+    normalize_embeddings: true  # 归一化嵌入向量
+
+# 大语言模型配置
+llm:
+  model: "qwen-flash"  # 模型名称
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"  # API 地址
+  api_key: "sk-3d13848166aa4a5c902ad99e6c141e73"  # API Key
+  temperature: 0.7  # 温度参数，控制随机性
+  max_tokens: 1024  # 最大生成 token 数
+
+# 文本分割配置
+text_splitter:
+  chunk_size: 500  # 每个文本块的大小（字符数）
+  chunk_overlap: 50  # 文本块之间的重叠大小
+
+# 向量存储配置
+vectorstore:
+  persist_directory: "./faiss_index"  # FAISS 索引保存路径
+
+# 检索配置
+retrieval:
+  search_kwargs:
+    k: 5  # 检索返回的最相关文档数量
