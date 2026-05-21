@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+confluent-kafka
+pymilvus
+sqlalchemy
+pydantic
+python-multipart
+requests
