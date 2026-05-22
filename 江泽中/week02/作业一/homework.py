@@ -110,18 +110,8 @@ class SimpleClassifier(nn.Module):
         if layer_sizes is None:
             # 初始化层大小列表
             layer_sizes = []
-            # 如果层数为2，只有1个隐藏层
-            if num_layers == 2:
-                layer_sizes = [hidden_dim]
-            # 如果层数为3，有2个隐藏层
-            elif num_layers == 3:
-                layer_sizes = [hidden_dim * 2, hidden_dim]
-            # 如果层数为4，有3个隐藏层
-            elif num_layers == 4:
-                layer_sizes = [hidden_dim * 4, hidden_dim * 2, hidden_dim]
-            # 如果层数为5，有4个隐藏层
-            elif num_layers == 5:
-                layer_sizes = [hidden_dim * 8, hidden_dim * 4, hidden_dim * 2, hidden_dim]
+            for i in range(num_layers - 1,-1,-1):
+                layer_sizes.append(pow(hidden_dim,i))
 
         # 初始化层列表
         layers = []
