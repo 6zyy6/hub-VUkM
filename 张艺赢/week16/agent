@@ -1,0 +1,103 @@
+from __future__ import annotations
+
+import random
+from dataclasses import dataclass
+
+from .domain import ActionType, AgentDecision, Observation, Role
+
+
+class BaseAgent:
+    def decide(self, observation: Observation) -> AgentDecision:
+        raise NotImplementedError
+
+
+@dataclass
+class RuleAgent(BaseAgent):
+    seed: int = 0
+
+    def decide(self, observation: Observation) -> AgentDecision:
+        rng = random.Random(self.seed + observation.player_id + observation.day * 97)
+        role = observation.role
+
+        if role == Role.WEREWOLF:
+            targets = [pid for pid in observation.legal_targets if pid not in observation.wolf_team]
+            target = targets[0] if targets else None
+            return AgentDecision(
+                actor_id=observation.player_id,
+                action_type=ActionType.KILL,
+                target_id=target,
+                reason="Targeting a non-wolf living player.",
+            )
+
+        if role == Role.SEER:
+            unknown = [pid for pid in observation.legal_targets if pid not in observation.seer_results]
+            target = unknown[0] if unknown else (observation.legal_targets[0] if observation.legal_targets else None)
+            return AgentDecision(
+                actor_id=observation.player_id,
+                action_type=ActionType.INSPECT,
+                target_id=target,
+                reason="Inspecting an unknown living player.",
+            )
+
+        if role == Role.WITCH:
+            poison_target = None
+            if observation.witch_poison_available:
+                candidates = [pid for pid in observation.legal_targets if pid != observation.night_victim]
+                poison_target = candidates[-1] if observation.day >= 2 and candidates else None
+            return AgentDecision(
+                actor_id=observation.player_id,
+                action_type=ActionType.WITCH,
+                save=observation.witch_save_available and observation.day <= 1 and observation.night_victim is not None,
+                poison_target_id=poison_target,
+                reason="Using save early and poison after more public information exists.",
+            )
+
+        if role == Role.HUNTER and observation.hunter_can_shoot:
+            target = observation.legal_targets[-1] if observation.legal_targets else None
+            return AgentDecision(
+                actor_id=observation.player_id,
+                action_type=ActionType.SHOOT,
+                target_id=target,
+                reason="Shooting the most suspicious available target.",
+            )
+
+        if observation.phase.value == "vote":
+            target = rng.choice(observation.legal_targets) if observation.legal_targets else None
+            return AgentDecision(
+                actor_id=observation.player_id,
+                action_type=ActionType.VOTE,
+                target_id=target,
+                reason="Voting from public suspicion baseline.",
+            )
+
+        if observation.phase.value == "day":
+            speech = self._speech(observation)
+            return AgentDecision(
+                actor_id=observation.player_id,
+                action_type=ActionType.SPEAK,
+                speech=speech,
+                reason="Sharing role-specific public reasoning.",
+            )
+
+        return AgentDecision(actor_id=observation.player_id, action_type=ActionType.PASS, reason="No legal action.")
+
+    def _speech(self, observation: Observation) -> str:
+        if observation.role == Role.WEREWOLF:
+            return f"P{observation.player_id} says: I am watching voting patterns and do not trust quiet players."
+        if observation.role == Role.SEER and observation.seer_results:
+            latest_id, latest_role = next(reversed(observation.seer_results.items()))
+            team = "wolf" if latest_role == Role.WEREWOLF else "good"
+            return f"P{observation.player_id} says: I have a read that P{latest_id} is likely {team}."
+        if observation.role == Role.WITCH:
+            return f"P{observation.player_id} says: The night result gives us voting information."
+        if observation.role == Role.HUNTER:
+            return f"P{observation.player_id} says: If I fall, my shot will follow my strongest suspicion."
+        return f"P{observation.player_id} says: I will vote based on speeches and yesterday's votes."
+
+
+@dataclass
+class LLMAdapter(BaseAgent):
+    fallback: RuleAgent
+
+    def decide(self, observation: Observation) -> AgentDecision:
+        return self.fallback.decide(observation)
