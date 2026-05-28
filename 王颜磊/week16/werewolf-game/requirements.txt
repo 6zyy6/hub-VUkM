@@ -1,0 +1,11 @@
+# 狼人杀 AI Agent Team 依赖
+# 核心依赖
+websockets>=12.0
+
+# 可选：用于更高级的AI决策
+# openai>=1.0.0
+# anthropic>=0.18.0
+
+# 数据分析（自进化模块）
+# pandas>=2.0.0
+# numpy>=1.24.0
