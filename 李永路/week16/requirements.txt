@@ -1,0 +1,14 @@
+# AI 狼人杀多智能体系统
+# 基础依赖（规则 Agent）
+# 无需额外依赖，仅使用 Python 标准库
+
+# LLM Agent 可选依赖（根据需要安装）
+
+# OpenAI GPT
+# pip install openai
+
+# 通义千问
+# pip install dashscope
+
+# DeepSeek（使用 openai 包）
+# pip install openai
