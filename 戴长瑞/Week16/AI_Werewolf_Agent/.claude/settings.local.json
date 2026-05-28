@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python *)",
+      "Bash(streamlit run *)",
+      "Bash(curl -s http://localhost:8501)",
+      "Bash(pkill -f \"streamlit run\")",
+      "Bash(taskkill //F //IM python.exe)",
+      "Bash(pkill -f \"streamlit\")",
+      "Bash(pkill -f \"python.*ui\")",
+      "Bash(curl -s http://localhost:8503)",
+      "Bash(curl -s -X POST http://localhost:8505 -d \"extra\")",
+      "Bash(curl -s http://localhost:8505)",
+      "Bash(rm test_flow.py)",
+      "Bash(cat)",
+      "Bash(rm -f test_flow.py test_flow2.py)",
+      "Bash(taskkill //F //IM python.exe //T)",
+      "Bash(rm -rf src/__pycache__ src/engine/__pycache__ src/agents/__pycache__ ui/__pycache__)",
+      "Bash(curl -s -X POST http://localhost:8506 -H \"Content-Type: application/x-www-form-urlencoded\" -d \"start=true\")",
+      "Bash(curl -s http://localhost:8506)",
+      "Bash(curl -s http://localhost:8507)",
+      "Bash(where streamlit *)",
+      "Bash(where python *)",
+      "Bash(pip install *)",
+      "Bash(pip list *)"
+    ]
+  }
+}
