@@ -1,0 +1,4 @@
+interface:
+  display_name: "股票波动可视化"
+  short_description: "把股票日波动与周波动画在一张图并给出买卖时机建议"
+  default_prompt: "Use $stock-volatility-visualizer to chart a stock daily and weekly volatility comparison and suggest conservative buy/sell timing."

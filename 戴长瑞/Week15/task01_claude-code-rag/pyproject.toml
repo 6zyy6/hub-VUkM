@@ -1,0 +1,10 @@
+# pyproject.toml
+[project]
+name = "claude-code-rag"
+version = "1.0.0"
+description = "Multi-modal RAG system with PDF parsing, retrieval and Q&A"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
