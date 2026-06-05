@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>狼人杀 AI Agent Team — 多智能体博弈观战</title>
+<style>
+:root {
+  --bg: #06060d;
+  --bg2: #0e0e1a;
+  --bg3: #161625;
+  --border: #252540;
+  --text: #c8c8d8;
+  --text2: #707088;
+  --moon: #ffd93d;
+  --wolf: #e74c3c;
+  --wolf-glow: #ff4757;
+  --seer: #a29bfe;
+  --seer-glow: #c4b5fd;
+  --witch: #00d2ff;
+  --witch-glow: #67e8f9;
+  --hunter: #f59e0b;
+  --hunter-glow: #fbbf24;
+  --guard: #10b981;
+  --guard-glow: #34d399;
+  --villager: #94a3b8;
+  --villager-glow: #cbd5e1;
+  --gold: #fbbf24;
+  --dead: #1a0a0a;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+@font-face { font-family:'GameFont'; src:local('Segoe UI'), local('PingFang SC'), local('Microsoft YaHei'); }
+body {
+  font-family:'GameFont', sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  overflow-x:hidden;
+  user-select:none;
+}
+/* === 星空背景 === */
+.stars-canvas { position:fixed; top:0; left:0; width:100%; height:100%; z-index:0; pointer-events:none; }
+/* === 主布局 === */
+.app {
+  position:relative; z-index:1;
+  display:grid;
+  grid-template-columns:1fr 340px;
+  grid-template-rows:64px 1fr;
+  grid-template-areas:"top top" "board panel";
+  height:100vh;
+  gap:0;
+}
+/* === 顶部 === */
+.top-bar {
+  grid-area:top;
+  background:linear-gradient(180deg, rgba(14,14,26,0.98), rgba(14,14,26,0.8));
+  border-bottom:1px solid var(--border);
+  display:flex; align-items:center; padding:0 24px;
+  backdrop-filter:blur(12px);
+  z-index:10;
+}
+.top-bar h1 {
+  font-size:18px; font-weight:800;
+  background:linear-gradient(135deg, #ff6b6b 0%, #ffd93d 50%, #ff6b6b 100%);
+  background-size:200% auto;
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  animation:shimmer 3s linear infinite;
+}
+@keyframes shimmer { to { background-position:200% center; } }
+.top-status {
+  margin-left:auto; display:flex; align-items:center; gap:20px; font-size:13px;
+}
+.phase-badge {
+  padding:6px 16px; border-radius:20px; font-weight:700; font-size:12px;
+  letter-spacing:1px; text-transform:uppercase;
+}
+.phase-badge.night { background:linear-gradient(135deg,#1e1b4b,#312e81); color:var(--seer); }
+.phase-badge.day { background:linear-gradient(135deg,#3d2e0a,#713f12); color:var(--moon); }
+.phase-badge.vote { background:linear-gradient(135deg,#1a0a0a,#450a0a); color:var(--wolf); }
+.phase-badge.over { background:linear-gradient(135deg,#0a1a0a,#0a450a); color:var(--guard); }
+.connection-dot { width:10px; height:10px; border-radius:50%; }
+.connection-dot.online { background:var(--guard); box-shadow:0 0 8px var(--guard-glow); }
+.connection-dot.offline { background:#555; animation:pulse-off 2s infinite; }
+@keyframes pulse-off { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.btn {
+  padding:8px 20px; border-radius:8px; border:none;
+  font-size:13px; font-weight:700; cursor:pointer;
+  transition:all 0.25s; text-transform:uppercase; letter-spacing:1px;
+}
+.btn-start { background:linear-gradient(135deg,var(--guard),var(--guard-glow)); color:#000; }
+.btn-start:hover { box-shadow:0 0 24px rgba(16,185,129,0.6); transform:translateY(-1px); }
+.btn-start:disabled { opacity:0.4; cursor:not-allowed; transform:none; box-shadow:none; }
+.btn-stop { background:linear-gradient(135deg,var(--wolf),var(--wolf-glow)); color:#fff; }
+.btn-stop:hover { box-shadow:0 0 24px rgba(231,76,60,0.6); }
+.btn-demo { border:1px solid var(--seer); color:var(--seer); background:transparent; }
+.btn-demo:hover { background:rgba(162,155,254,0.15); }
+.btn-voice { border:1px solid var(--gold); color:var(--gold); background:transparent; }
+.btn-voice:hover { background:rgba(251,191,36,0.15); }
+.btn-voice.muted { border-color:var(--text2); color:var(--text2); }
+/* === 游戏桌面 === */
+.board-area {
+  grid-area:board; position:relative; overflow:hidden;
+  background:radial-gradient(ellipse at center, #0e0e1a 0%, #06060d 100%);
+}
+/* 桌面圆 */
+.game-table {
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:min(640px, 70vmin); height:min(640px, 70vmin);
+  border-radius:50%;
+  border:1px solid rgba(255,255,255,0.06);
+  background:radial-gradient(circle, rgba(20,20,40,0.9), rgba(8,8,20,0.95));
+  box-shadow:inset 0 0 120px rgba(0,0,0,0.5), 0 0 60px rgba(0,0,0,0.3);
+}
+.table-center {
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  text-align:center; z-index:2;
+}
+.table-center .icon {
+  font-size:48px; line-height:1;
+  animation:float 3s ease-in-out infinite;
+}
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+.table-center .label {
+  font-size:12px; color:var(--text2); letter-spacing:3px; margin-top:4px;
+}
+/* 夜晚遮罩 */
+.night-veil {
+  position:absolute; inset:0; background:rgba(2,2,12,0.88);
+  z-index:5; pointer-events:none;
+  opacity:0; transition:opacity 1.2s;
+  display:flex; align-items:center; justify-content:center;
+}
+.night-veil.active { opacity:1; }
+.night-veil .moon-icon {
+  font-size:80px; animation:float 4s ease-in-out infinite;
+  filter:drop-shadow(0 0 40px rgba(255,217,61,0.5));
+}
+.night-veil .moon-text {
+  position:absolute; bottom:30%; font-size:20px; color:var(--moon);
+  letter-spacing:6px; font-weight:300;
+  text-shadow:0 0 20px rgba(255,217,61,0.6);
+}
+/* 玩家卡牌 */
+.player-card {
+  position:absolute; width:110px;
+  transform:translate(-50%,-50%);
+  text-align:center;
+  cursor:pointer;
+  transition:all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  z-index:3;
+}
+.player-card:hover { z-index:20; transform:translate(-50%,-50%) scale(1.2); }
+.player-card.dead { opacity:0.35; filter:grayscale(1); }
+.player-card.dead .avatar-ring { animation:none; }
+.player-card.sheriff .avatar-ring { border-color:var(--gold) !important; }
+.player-card.sheriff::after {
+  content:'★'; position:absolute; top:-8px; right:10px;
+  font-size:16px; color:var(--gold);
+  text-shadow:0 0 8px var(--gold);
+  animation:float 1.5s ease-in-out infinite;
+}
+/* 头像环 */
+.avatar-ring {
+  width:62px; height:62px; border-radius:50%;
+  margin:0 auto;
+  border:3px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  position:relative;
+  transition:all 0.3s;
+}
+.avatar-ring.wolf { border-color:var(--wolf); box-shadow:0 0 16px rgba(231,76,60,0.5); }
+.avatar-ring.seer { border-color:var(--seer); box-shadow:0 0 16px rgba(162,155,254,0.5); }
+.avatar-ring.witch { border-color:var(--witch); box-shadow:0 0 16px rgba(0,210,255,0.5); }
+.avatar-ring.hunter { border-color:var(--hunter); box-shadow:0 0 16px rgba(245,158,11,0.5); }
+.avatar-ring.guard { border-color:var(--guard); box-shadow:0 0 16px rgba(16,185,129,0.5); }
+.avatar-ring.villager { border-color:var(--villager); box-shadow:0 0 8px rgba(148,163,184,0.3); }
+.avatar-emoji { font-size:30px; line-height:1; }
+.avatar-ring .skull-icon {
+  position:absolute; font-size:20px; opacity:0;
+  transition:opacity 0.5s;
+}
+.player-card.dead .avatar-ring .skull-icon { opacity:1; }
+.player-card.dead .avatar-emoji { opacity:0.3; }
+/* 名字标签 */
+.player-name {
+  margin-top:4px; font-size:11px; font-weight:700;
+  background:rgba(0,0,0,0.6); padding:3px 10px;
+  border-radius:10px; display:inline-block;
+  transition:all 0.3s;
+}
+.player-card.dead .player-name { text-decoration:line-through; color:var(--text2); }
+/* 角色标签 */
+.role-tag {
+  margin-top:2px; font-size:10px; font-weight:700;
+  padding:1px 8px; border-radius:8px;
+  display:inline-block; letter-spacing:1px;
+  background:rgba(0,0,0,0.5);
+  transition:all 0.3s;
+}
+.role-tag.wolf { color:var(--wolf); border:1px solid var(--wolf); }
+.role-tag.seer { color:var(--seer); border:1px solid var(--seer); }
+.role-tag.witch { color:var(--witch); border:1px solid var(--witch); }
+.role-tag.hunter { color:var(--hunter); border:1px solid var(--hunter); }
+.role-tag.guard { color:var(--guard); border:1px solid var(--guard); }
+.role-tag.villager { color:var(--villager); border:1px solid var(--villager); }
+.role-tag.hidden { color:var(--text2); border:1px solid var(--text2); }
+/* 投票标记 */
+.vote-marker {
+  position:absolute; top:-24px; left:50%; transform:translateX(-50%);
+  font-size:22px; opacity:0; transition:all 0.3s;
+  z-index:4;
+}
+.vote-marker.active { opacity:1; animation:voteBounce 0.5s ease; }
+@keyframes voteBounce {
+  0%{transform:translateX(-50%) scale(0);}
+  60%{transform:translateX(-50%) scale(1.3);}
+  100%{transform:translateX(-50%) scale(1);}
+}
+/* 位置分布 */
+.p0{ top:8%; left:50%; }
+.p1{ top:16%; right:12%; }
+.p2{ top:32%; right:4%; }
+.p3{ top:50%; right:3%; }
+.p4{ bottom:32%; right:4%; }
+.p5{ bottom:16%; right:12%; }
+.p6{ bottom:8%; left:50%; }
+.p7{ bottom:16%; left:12%; }
+.p8{ bottom:32%; left:4%; }
+.p9{ top:50%; left:3%; }
+.p10{ top:32%; left:4%; }
+.p11{ top:16%; left:12%; }
+/* === 右侧面板 === */
+.panel {
+  grid-area:panel;
+  background:var(--bg2);
+  border-left:1px solid var(--border);
+  display:flex; flex-direction:column;
+  overflow:hidden;
+}
+.panel-tabs {
+  display:flex; border-bottom:1px solid var(--border);
+}
+.panel-tab {
+  flex:1; text-align:center; padding:12px;
+  font-size:11px; font-weight:700; cursor:pointer;
+  color:var(--text2); letter-spacing:1px;
+  transition:all 0.2s; border-bottom:2px solid transparent;
+  text-transform:uppercase;
+}
+.panel-tab.active { color:var(--seer); border-bottom-color:var(--seer); }
+.panel-content { flex:1; overflow-y:auto; padding:12px; }
+/* 消息列表 */
+.msg-item {
+  padding:8px 10px; margin-bottom:6px; border-radius:8px;
+  font-size:11px; line-height:1.5;
+  animation:msgIn 0.4s ease;
+  background:var(--bg3);
+  border-left:3px solid var(--border);
+}
+@keyframes msgIn { from{ opacity:0; transform:translateX(10px); } to{ opacity:1; transform:translateX(0); } }
+.msg-item.speech { border-left-color:var(--seer); }
+.msg-item.vote { border-left-color:var(--wolf); }
+.msg-item.system { border-left-color:var(--moon); background:rgba(255,217,61,0.05); }
+.msg-item .msg-sender { color:var(--moon); font-weight:700; }
+.msg-item .msg-time { font-size:10px; color:var(--text2); float:right; }
+.msg-item .msg-badge {
+  display:inline-block; padding:1px 5px; border-radius:3px;
+  font-size:9px; font-weight:700; margin-right:4px;
+  text-transform:uppercase;
+}
+.msg-badge.speech { background:rgba(162,155,254,0.2); color:var(--seer); }
+.msg-badge.vote { background:rgba(231,76,60,0.2); color:var(--wolf); }
+.msg-badge.system { background:rgba(255,217,61,0.2); color:var(--moon); }
+/* 投票统计 */
+.vote-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; padding:6px; }
+.vote-row .v-icon { width:28px; height:28px; border-radius:50%; background:var(--bg3); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; border:1px solid var(--border); }
+.vote-row .v-bar-wrap { flex:1; height:28px; background:var(--bg3); border-radius:6px; overflow:hidden; position:relative; }
+.vote-row .v-bar { height:100%; border-radius:6px; transition:width 0.6s; }
+.vote-row .v-count { font-size:13px; font-weight:700; min-width:30px; text-align:right; }
+/* === 游戏结束弹窗 === */
+.game-over-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:100;
+  display:flex; align-items:center; justify-content:center;
+  opacity:0; pointer-events:none; transition:opacity 0.8s;
+}
+.game-over-overlay.active { opacity:1; pointer-events:all; }
+.game-over-card {
+  background:var(--bg2); border:2px solid var(--border);
+  border-radius:20px; padding:40px; text-align:center;
+  max-width:500px; width:90%;
+  animation:popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+@keyframes popIn { from{ transform:scale(0.5); opacity:0; } to{ transform:scale(1); opacity:1; } }
+.game-over-card .trophy { font-size:64px; }
+.game-over-card h2 { font-size:28px; margin:12px 0; }
+.game-over-card .winner-name { color:var(--moon); }
+.game-over-card .stats { display:flex; gap:20px; justify-content:center; margin:20px 0; }
+.game-over-card .stat-num { font-size:32px; font-weight:800; }
+.game-over-card .stat-label { font-size:11px; color:var(--text2); }
+/* === 动画粒子 === */
+.death-particle {
+  position:absolute; pointer-events:none;
+  animation:deathBurst 1s ease-out forwards;
+}
+@keyframes deathBurst {
+  0%{ transform:translate(0,0) scale(1); opacity:1; }
+  100%{ transform:translate(var(--dx),var(--dy)) scale(0); opacity:0; }
+}
+/* === 响应式 === */
+@media (max-width:900px) {
+  .app { grid-template-columns:1fr; grid-template-rows:56px 1fr auto; grid-template-areas:"top" "board" "panel"; }
+  .board-area { min-height:500px; }
+  .player-card { width:80px; }
+  .avatar-ring { width:44px; height:44px; }
+  .avatar-emoji { font-size:22px; }
+}
+</style>
+</head>
+<body>
+<canvas class="stars-canvas" id="starCanvas"></canvas>
+
+<div class="app">
+  <!-- 顶部 -->
+  <div class="top-bar">
+    <h1>🐺  AI 狼人杀 · 多智能体博弈</h1>
+    <div class="top-status">
+      <span class="connection-dot offline" id="connDot"></span>
+      <span id="connText" style="font-size:12px;color:var(--text2)">未连接</span>
+      <span class="phase-badge night" id="phaseBadge">准备中</span>
+      <span style="font-size:12px;">回合 <b id="roundNum">0</b></span>
+      <span style="font-size:12px;">存活 <b id="aliveCount">12/12</b></span>
+      <button class="btn btn-voice" id="btnVoice" onclick="toggleVoice()" title="语音播报">🔊 语音</button>
+      <button class="btn btn-demo" id="btnDemo" onclick="startDemo()">🎬 离线演示</button>
+      <button class="btn btn-start" id="btnStart" onclick="startGame()">▶ 开始对战</button>
+      <button class="btn btn-stop" id="btnStop" onclick="stopGame()" disabled>■ 停止</button>
+    </div>
+  </div>
+
+  <!-- 游戏桌面 -->
+  <div class="board-area" id="boardArea">
+    <div class="game-table">
+      <div class="table-center">
+        <div class="icon" id="tableIcon">🃏</div>
+        <div class="label" id="tableLabel">等待开局</div>
+      </div>
+    </div>
+    <div id="playersContainer"></div>
+    <div class="night-veil" id="nightVeil">
+      <div class="moon-icon">🌕</div>
+      <div class="moon-text">天 黑 请 闭 眼</div>
+    </div>
+  </div>
+
+  <!-- 右侧面板 -->
+  <div class="panel">
+    <div class="panel-tabs">
+      <div class="panel-tab active" onclick="switchTab('log')">📜 消息</div>
+      <div class="panel-tab" onclick="switchTab('vote')">🗳 投票</div>
+      <div class="panel-tab" onclick="switchTab('stats')">📊 统计</div>
+    </div>
+    <div class="panel-content" id="panelContent">
+      <div id="msgList"><div class="msg-item system">等待游戏开始...</div></div>
+      <div id="voteView" style="display:none;"></div>
+      <div id="statsView" style="display:none;"></div>
+    </div>
+  </div>
+</div>
+
+<div class="game-over-overlay" id="gameOverOverlay">
+  <div class="game-over-card" id="gameOverCard"></div>
+</div>
+
+<script>
+// ============ 星空背景 ============
+const canvas = document.getElementById('starCanvas');
+const ctx = canvas.getContext('2d');
+let stars = [];
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+function initStars() {
+  resizeCanvas();
+  stars = Array.from({length:120}, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height,
+    r: Math.random() * 1.5 + 0.3,
+    a: Math.random(),
+    da: (Math.random() - 0.5) * 0.02,
+    v: Math.random() * 0.3 + 0.05,
+  }));
+}
+function drawStars() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  stars.forEach(s => {
+    s.a += s.da;
+    s.y -= s.v;
+    if(s.y < -5) { s.y = canvas.height + 5; s.x = Math.random() * canvas.width; }
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(200,200,255,${Math.abs(Math.sin(s.a))*0.6+0.2})`;
+    ctx.fill();
+  });
+  requestAnimationFrame(drawStars);
+}
+initStars(); drawStars();
+window.addEventListener('resize', () => { resizeCanvas(); stars.forEach(s => { s.x = Math.random()*canvas.width; s.y = Math.random()*canvas.height; }); });
+
+// ============ 角色配置 ============
+const ROLE_CONFIG = {
+  '狼人': { emoji:'🐺', cls:'wolf', cn:'狼人', team:'evil' },
+  '预言家': { emoji:'🔮', cls:'seer', cn:'预言家', team:'good' },
+  '女巫': { emoji:'🧪', cls:'witch', cn:'女巫', team:'good' },
+  '猎人': { emoji:'🏹', cls:'hunter', cn:'猎人', team:'good' },
+  '守卫': { emoji:'🛡️', cls:'guard', cn:'守卫', team:'good' },
+  '村民': { emoji:'👤', cls:'villager', cn:'村民', team:'good' },
+};
+
+// ============ TTS 语音播报 ============
+let voiceEnabled = true;
+// 角色→性别映射：0=male(低音), 1=female(高音)
+const ROLE_GENDER = {
+  '狼人': 0, '预言家': 1, '女巫': 1, '猎人': 0, '守卫': 0, '村民': 0
+};
+let voiceCache = null; // { male: Voice, female: Voice }
+
+function initVoices() {
+  const voices = speechSynthesis.getVoices();
+  if(voices.length === 0) return;
+  // 优先中文女声
+  voiceCache = {
+    female: voices.find(v => v.lang.startsWith('zh') && v.name.includes('Female')) ||
+            voices.find(v => v.lang.startsWith('zh-CN') && !v.name.toLowerCase().includes('male')) ||
+            voices.find(v => v.lang.startsWith('zh')),
+    male: voices.find(v => v.lang.startsWith('zh') && v.name.includes('Male')) ||
+           voices.find(v => v.lang.startsWith('zh-CN')) ||
+           voices.find(v => v.lang.startsWith('zh')),
+  };
+}
+speechSynthesis.onvoiceschanged = initVoices;
+initVoices();
+
+function speakPlayerSpeech(playerId, role, text) {
+  if(!voiceEnabled) return;
+  // 清理过长的文本（超过200字截断，防止播报卡死）
+  const shortText = text.length > 200 ? text.slice(0, 200) + '……' : text;
+
+  const utt = new SpeechSynthesisUtterance(shortText);
+  utt.lang = 'zh-CN';
+  utt.rate = 1.05;
+  utt.volume = 0.9;
+
+  const gender = ROLE_GENDER[role] !== undefined ? ROLE_GENDER[role] : 0;
+  if(voiceCache && voiceCache[gender === 1 ? 'female' : 'male']) {
+    utt.voice = voiceCache[gender === 1 ? 'female' : 'male'];
+  }
+  // 备用：通过 pitch 区分男女
+  utt.pitch = gender === 1 ? 1.4 : 0.8;
+
+  speechSynthesis.speak(utt);
+}
+
+function toggleVoice() {
+  voiceEnabled = !voiceEnabled;
+  const btn = document.getElementById('btnVoice');
+  if(voiceEnabled) {
+    btn.textContent = '🔊 语音';
+    btn.classList.remove('muted');
+  } else {
+    btn.textContent = '🔇 静音';
+    btn.classList.add('muted');
+    speechSynthesis.cancel();
+  }
+}
+
+// ============ WebSocket ============
+let ws = null, gameState = null, currentTab = 'log';
+const WS_URL = 'ws://localhost:8765';
+
+function connectWS() {
+  if(ws) { try{ws.close();}catch(e){} }
+  ws = new WebSocket(WS_URL);
+  ws.onopen = () => {
+    setConnected(true);
+    ws.send(JSON.stringify({type:'subscribe',data:{channel:'all'}}));
+    ws.send(JSON.stringify({type:'get_game_state'}));
+  };
+  ws.onmessage = e => {
+    try { handleServerMsg(JSON.parse(e.data)); } catch(ex) {}
+  };
+  ws.onclose = () => { setConnected(false); setTimeout(connectWS,3000); };
+  ws.onerror = () => {};
+}
+
+function setConnected(v) {
+  const dot = document.getElementById('connDot');
+  const txt = document.getElementById('connText');
+  if(v) { dot.className='connection-dot online'; txt.textContent='已连接'; }
+  else { dot.className='connection-dot offline'; txt.textContent='未连接'; }
+}
+
+function handleServerMsg(msg) {
+  const {type, data} = msg;
+  switch(type) {
+    case 'game_started': initPlayers(data); addMsg('system','游戏开始！12名AI准备博弈'); break;
+    case 'game_state': updateBoard(data); break;
+    case 'game_phase': setPhase(data.phase, data.round); break;
+    case 'night_result': handleNight(data); break;
+    case 'day_result': handleDay(data); break;
+    case 'game_event': handleEvent(data); break;
+    case 'game_over': gameOver(data); break;
+    case 'agent_summary': updateAgentSummary(data); break;
+    case 'error': addMsg('system','⚠ '+msg.message); break;
+  }
+}
+
+// ============ 玩家渲染 ============
+function initPlayers(data) {
+  const container = document.getElementById('playersContainer');
+  container.innerHTML = '';
+  (data.player_names || Array.from({length:12},(_,i)=>'玩家'+(i+1))).forEach((name,i) => {
+    const card = document.createElement('div');
+    card.className = `player-card p${i}`;
+    card.id = `player-${i+1}`;
+    card.innerHTML = `
+      <div class="vote-marker" id="vote-icon-${i+1}">🗳</div>
+      <div class="avatar-ring" id="ring-${i+1}">
+        <span class="avatar-emoji">❓</span>
+        <span class="skull-icon">💀</span>
+      </div>
+      <div class="player-name">${name}</div>
+      <div class="role-tag hidden" id="role-tag-${i+1}">???</div>
+    `;
+    card.onclick = () => showPlayerDetail(i+1);
+    container.appendChild(card);
+  });
+  document.getElementById('aliveCount').textContent = '12/12';
+}
+
+function updateBoard(data) {
+  if(!data || !data.players) return;
+  data.players.forEach(p => {
+    const card = document.getElementById(`player-${p.id}`);
+    const ring = document.getElementById(`ring-${p.id}`);
+    const roleTag = document.getElementById(`role-tag-${p.id}`);
+    if(!card || !ring) return;
+
+    if(!p.alive) card.classList.add('dead');
+    else card.classList.remove('dead');
+    if(p.is_sheriff) card.classList.add('sheriff');
+    else card.classList.remove('sheriff');
+
+    // 死亡后揭示身份
+    if(!p.alive && p.role && p.role !== '???') {
+      const cfg = ROLE_CONFIG[p.role] || ROLE_CONFIG['村民'];
+      ring.querySelector('.avatar-emoji').textContent = cfg.emoji;
+      ring.className = `avatar-ring ${cfg.cls}`;
+      roleTag.className = `role-tag ${cfg.cls}`;
+      roleTag.textContent = cfg.cn;
+    }
+  });
+  document.getElementById('roundNum').textContent = data.round || 0;
+  document.getElementById('aliveCount').textContent =
+    `${data.players.filter(p=>p.alive).length}/${data.players.length}`;
+}
+
+function updateAgentSummary(data) {
+  if(!data) return;
+  Object.entries(data).forEach(([pid, info]) => {
+    if(!info.alive) {
+      const ring = document.getElementById(`ring-${pid}`);
+      const roleTag = document.getElementById(`role-tag-${pid}`);
+      const card = document.getElementById(`player-${pid}`);
+      const cfg = ROLE_CONFIG[info.role] || ROLE_CONFIG['村民'];
+      if(ring && cfg) {
+        ring.querySelector('.avatar-emoji').textContent = cfg.emoji;
+        ring.className = `avatar-ring ${cfg.cls}`;
+      }
+      if(roleTag) {
+        roleTag.className = `role-tag ${cfg.cls}`;
+        roleTag.textContent = cfg.cn;
+      }
+      if(card) card.classList.add('dead');
+    }
+  });
+}
+
+function setPhase(phase, round) {
+  const badge = document.getElementById('phaseBadge');
+  const veil = document.getElementById('nightVeil');
+  const tIcon = document.getElementById('tableIcon');
+  const tLabel = document.getElementById('tableLabel');
+  const phaseMap = { night:'夜晚',day:'白天',vote:'投票',start:'准备',game_over:'结束' };
+
+  badge.className = `phase-badge ${phase}`;
+  badge.textContent = phaseMap[phase] || phase;
+
+  if(phase === 'night') {
+    veil.classList.add('active');
+    tIcon.textContent = '🌙'; tLabel.textContent = '夜晚行动中';
+  } else {
+    veil.classList.remove('active');
+    tIcon.textContent = '☀️'; tLabel.textContent = '白天讨论';
+  }
+  if(phase === 'vote') { tIcon.textContent = '⚖️'; tLabel.textContent = '投票放逐'; }
+
+  document.getElementById('roundNum').textContent = round || 0;
+  // 清除投票标记
+  document.querySelectorAll('.vote-marker').forEach(v => v.classList.remove('active'));
+}
+
+function handleNight(data) {
+  const veil = document.getElementById('nightVeil');
+  veil.classList.remove('active');
+  if(data.dead_players && data.dead_players.length > 0) {
+    data.dead_players.forEach(pid => {
+      spawnDeathParticles(pid);
+      const card = document.getElementById(`player-${pid}`);
+      if(card) setTimeout(() => card.classList.add('dead'), 300);
+    });
+    addMsg('system',`💀 夜晚死亡：${data.dead_players.map(p=>'玩家'+p).join(', ')}`);
+  } else {
+    addMsg('system','🌅 平安夜！无人死亡');
+  }
+}
+
+function handleDay(data) {
+  if(data.eliminated) {
+    spawnDeathParticles(data.eliminated);
+    setTimeout(() => {
+      const card = document.getElementById(`player-${data.eliminated}`);
+      if(card) card.classList.add('dead');
+    }, 300);
+    addMsg('system',`⚖️ 投票放逐：玩家${data.eliminated}`);
+  }
+}
+
+function handleEvent(data) {
+  if(data.type === 'agent_speech') {
+    addMsg('speech', `<b style="color:#ffd93d">玩家${data.player_id}</b>：${data.speech}`);
+    highlightPlayer(data.player_id);
+    if(data.agent_info) updateAgentSummary({[data.player_id]:data.agent_info});
+    const role = data.agent_info?.role || '村民';
+    speakPlayerSpeech(data.player_id, role, data.speech);
+  } else if(data.type === 'vote_update') {
+    updateVoteBars(data.data?.votes || {});
+  }
+}
+
+// ============ 死亡粒子特效 ============
+function spawnDeathParticles(pid) {
+  const card = document.getElementById(`player-${pid}`);
+  if(!card) return;
+  const rect = card.getBoundingClientRect();
+  const cx = rect.left + rect.width/2;
+  const cy = rect.top + rect.height/2;
+
+  for(let i=0; i<20; i++) {
+    const p = document.createElement('div');
+    p.className = 'death-particle';
+    p.style.cssText = `
+      left:${cx}px; top:${cy}px;
+      width:${Math.random()*6+2}px; height:${Math.random()*6+2}px;
+      background:${['#ff4757','#ffd93d','#ff6b6b','#fff'][Math.floor(Math.random()*4)]};
+      border-radius:50%;
+      --dx:${(Math.random()-0.5)*200}px;
+      --dy:${(Math.random()-0.5)*200}px;
+    `;
+    document.body.appendChild(p);
+    setTimeout(() => p.remove(), 1000);
+  }
+}
+
+function highlightPlayer(pid) {
+  const card = document.getElementById(`player-${pid}`);
+  if(!card) return;
+  card.style.transform = card.style.transform.replace('scale(1.2)','') + ' scale(1.3)';
+  card.style.filter = 'brightness(1.5) drop-shadow(0 0 12px #ffd93d)';
+  setTimeout(() => {
+    card.style.transform = card.style.transform.replace(' scale(1.3)','');
+    card.style.filter = '';
+  }, 800);
+}
+
+// ============ 消息 ============
+function addMsg(type, content) {
+  const list = document.getElementById('msgList');
+  const div = document.createElement('div');
+  div.className = `msg-item ${type}`;
+  const now = new Date();
+  const time = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  div.innerHTML = `
+    <span class="msg-badge ${type}">${type}</span>
+    <span class="msg-time">${time}</span>
+    <span>${content}</span>
+  `;
+  list.prepend(div);
+  while(list.children.length > 200) list.lastChild.remove();
+}
+
+// ============ 投票 ============
+function updateVoteBars(votes) {
+  const container = document.getElementById('voteView');
+  if(!votes || Object.keys(votes).length === 0) {
+    container.innerHTML = '<div style="color:var(--text2);text-align:center;padding:20px;">暂无投票</div>';
+    return;
+  }
+  const total = Object.values(votes).reduce((a,b)=>a+b,0);
+  container.innerHTML = Object.entries(votes).map(([pid,count]) => {
+    const pct = total>0 ? count/total*100 : 0;
+    return `<div class="vote-row">
+      <div class="v-icon">${pid}</div>
+      <div class="v-bar-wrap">
+        <div class="v-bar" style="width:${pct}%; background:${pct>50?'linear-gradient(90deg,#e74c3c,#ff4757)':'linear-gradient(90deg,#4ecdc4,#10b981)'};"></div>
+      </div>
+      <div class="v-count" style="color:${pct>50?'#ff4757':'#10b981'}">${count}票</div>
+    </div>`;
+  }).join('');
+  // 更新投票图标
+  Object.keys(votes).forEach(pid => {
+    const icon = document.getElementById(`vote-icon-${pid}`);
+    if(icon) { icon.classList.add('active'); setTimeout(()=>icon.classList.remove('active'),2000); }
+  });
+}
+
+// ============ 游戏结束 ============
+function gameOver(data) {
+  const overlay = document.getElementById('gameOverOverlay');
+  const card = document.getElementById('gameOverCard');
+  const isGood = data.winner && data.winner.includes('好人');
+  card.innerHTML = `
+    <div class="trophy">${isGood ? '🏆' : '🐺'}</div>
+    <h2>${isGood ? '好人阵营' : '狼人阵营'} <span class="winner-name">获胜!</span></h2>
+    <div class="stats">
+      <div><div class="stat-num">${data.summary?.total_rounds || '?'}</div><div class="stat-label">总回合</div></div>
+      <div><div class="stat-num">${data.summary?.alive_players || '?'}</div><div class="stat-label">存活玩家</div></div>
+    </div>
+    <button class="btn btn-start" onclick="document.getElementById('gameOverOverlay').classList.remove('active');startGame();">再来一局</button>
+    <button class="btn btn-demo" style="margin-left:8px;" onclick="document.getElementById('gameOverOverlay').classList.remove('active');">关闭</button>
+  `;
+  overlay.classList.add('active');
+  setPhase('over');
+  document.getElementById('btnStart').disabled = false;
+  document.getElementById('btnStop').disabled = true;
+}
+
+// ============ 面板切换 ============
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.panel-tab').forEach(t => t.classList.toggle('active', t.textContent.includes(tab==='log'?'消息':tab==='vote'?'投票':'统计')));
+  document.getElementById('msgList').style.display = tab==='log'?'block':'none';
+  document.getElementById('voteView').style.display = tab==='vote'?'block':'none';
+  document.getElementById('statsView').style.display = tab==='stats'?'block':'none';
+}
+
+// ============ 玩家详情 ============
+function showPlayerDetail(pid) {
+  if(ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({type:'get_agent_info', data:{player_id:pid}}));
+  }
+  highlightPlayer(pid);
+}
+
+// ============ 控制 ============
+function startGame() {
+  document.getElementById('gameOverOverlay').classList.remove('active');
+  if(ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({type:'start_game',data:{player_names:Array.from({length:12},(_,i)=>'玩家'+(i+1))}}));
+  } else {
+    startDemo();
+  }
+  document.getElementById('btnStart').disabled = true;
+  document.getElementById('btnStop').disabled = false;
+}
+
+function stopGame() {
+  if(ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'stop_game'}));
+  document.getElementById('btnStart').disabled = false;
+  document.getElementById('btnStop').disabled = true;
+  setPhase('start');
+}
+
+// ============ 离线演示 ============
+let demoInterval = null;
+function startDemo() {
+  if(demoInterval) clearInterval(demoInterval);
+  document.getElementById('btnStart').disabled = true;
+
+  const names = Array.from({length:12},(_,i)=>'玩家'+(i+1));
+  const roles = ['狼人','狼人','狼人','狼人','预言家','女巫','猎人','守卫','村民','村民','村民','村民'];
+  // Fisher-Yates shuffle
+  const shuffled = [...roles];
+  for(let i=shuffled.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];}
+
+  initPlayers({player_names:names});
+  setPhase('night',1);
+  addMsg('system','🎬 离线演示模式启动（角色随机分配）');
+
+  // 揭示狼人队友（假装）
+  setTimeout(() => {
+    shuffled.forEach((role,i) => {
+      if(role === '狼人') {
+        addMsg('system',`🐺 狼人视角：玩家${i+1} 是狼队友`);
+      }
+    });
+  }, 1500);
+
+  let round = 0;
+  const alive = names.map(()=>true);
+  let phase = 'night';
+
+  demoInterval = setInterval(() => {
+    if(phase === 'night') {
+      phase = 'day';
+      setPhase('night', round+1);
+      // 夜晚：狼人杀人
+      const targets = alive.map((a,i)=>a?i+1:null).filter(x=>x);
+      if(targets.length > 2) {
+        const victim = targets[Math.floor(Math.random()*targets.length)];
+        alive[victim-1] = false;
+        setTimeout(() => handleNight({dead_players:[victim]}), 2000);
+        setTimeout(() => {
+          const ring = document.getElementById(`ring-${victim}`);
+          const roleTag = document.getElementById(`role-tag-${victim}`);
+          const cfg = ROLE_CONFIG[shuffled[victim-1]] || ROLE_CONFIG['村民'];
+          if(ring) { ring.querySelector('.avatar-emoji').textContent = cfg.emoji; ring.className = `avatar-ring ${cfg.cls}`; }
+          if(roleTag) { roleTag.className = `role-tag ${cfg.cls}`; roleTag.textContent = cfg.cn; }
+          addMsg('speech',`<b style="color:#ffd93d">玩家${victim}</b>：啊...我死了...（身份：${cfg.cn}）`);
+          speakPlayerSpeech(victim, shuffled[victim-1], `啊...我死了...身份是${cfg.cn}`);
+        }, 2300);
+      }
+    } else {
+      phase = 'night';
+      round++;
+      setPhase('day', round);
+      // 白天：发言 + 投票
+      const speakers = alive.map((a,i)=>a?i+1:null).filter(x=>x).slice(0,4);
+      speakers.forEach((s,i) => {
+        setTimeout(() => {
+          const lines = [
+            '我是普通村民，目前局势还不明朗，建议大家多发言分析。',
+            '我怀疑上一轮有人带节奏，大家注意不要盲目跟票。',
+            '建议预言家出来带队，好人跟着走就行。',
+            '请大家冷静分析，理性投票，好人团结一致才能赢。',
+          ];
+          addMsg('speech',`<b style="color:#ffd93d">玩家${s}</b>：${lines[i%4]}`);
+          highlightPlayer(s);
+          speakPlayerSpeech(s, shuffled[s-1], lines[i%4]);
+        }, 500 + i*1200);
+      });
+
+      // 投票
+      setTimeout(() => {
+        const candidates = alive.map((a,i)=>a?i+1:null).filter(x=>x);
+        if(candidates.length > 2) {
+          const eliminated = candidates[Math.floor(Math.random()*candidates.length)];
+          const votes = {}; candidates.forEach(c => { if(c!==eliminated) votes[c]=1; });
+          votes[eliminated] = Math.floor(candidates.length*0.6);
+          updateVoteBars(votes);
+          alive[eliminated-1] = false;
+          setTimeout(() => handleDay({eliminated}), 1000);
+          setTimeout(() => {
+            const ring = document.getElementById(`ring-${eliminated}`);
+            const roleTag = document.getElementById(`role-tag-${eliminated}`);
+            const cfg = ROLE_CONFIG[shuffled[eliminated-1]] || ROLE_CONFIG['村民'];
+            if(ring) { ring.querySelector('.avatar-emoji').textContent = cfg.emoji; ring.className = `avatar-ring ${cfg.cls}`; }
+            if(roleTag) { roleTag.className = `role-tag ${cfg.cls}`; roleTag.textContent = cfg.cn; }
+          }, 1300);
+        }
+      }, 500 + speakers.length * 1200 + 1000);
+
+      const remaining = alive.filter(Boolean).length;
+      document.getElementById('aliveCount').textContent = `${remaining}/12`;
+
+      if(remaining <= 3) {
+        setTimeout(() => {
+          clearInterval(demoInterval);
+          const wolfAlive = shuffled.map((r,i)=>r==='狼人'&&alive[i]).filter(Boolean).length;
+          const winner = wolfAlive >= remaining - wolfAlive ? '狼人阵营' : '好人阵营';
+          gameOver({winner, summary:{total_rounds:round, alive_players:remaining}});
+          // 揭示所有身份
+          shuffled.forEach((role,i) => {
+            const ring = document.getElementById(`ring-${i+1}`);
+            const roleTag = document.getElementById(`role-tag-${i+1}`);
+            const card = document.getElementById(`player-${i+1}`);
+            const cfg = ROLE_CONFIG[role] || ROLE_CONFIG['村民'];
+            if(ring) { ring.querySelector('.avatar-emoji').textContent = cfg.emoji; ring.className = `avatar-ring ${cfg.cls}`; }
+            if(roleTag) { roleTag.className = `role-tag ${cfg.cls}`; roleTag.textContent = cfg.cn; }
+            if(!alive[i] && card) card.classList.add('dead');
+          });
+          document.getElementById('btnStart').disabled = false;
+          document.getElementById('btnStop').disabled = true;
+        }, 3000);
+      }
+    }
+  }, 6000);
+
+  // 首轮也触发一次白天
+  setTimeout(() => { phase='night'; }, 100);
+}
+
+// ============ 初始化 ============
+initPlayers({player_names:Array.from({length:12},(_,i)=>'玩家'+(i+1))});
+connectWS();
+document.getElementById('btnStop').disabled = true;
+</script>
+</body>
+</html>
