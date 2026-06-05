@@ -1,0 +1,38 @@
+NEW_FILE_CODE
+# AI狼人杀游戏配置
+game:
+  num_players: 12
+  roles_distribution:
+    werewolf: 4
+    seer: 1
+    witch: 1
+    hunter: 1
+    villager: 5
+
+  max_rounds: 20
+  enable_voice: false
+
+llm:
+  provider: "deepseek"
+  model: "deepseek-chat"
+  api_key: ""
+  temperature: 0.7
+  max_tokens: 500
+
+agents:
+  enable_memory: true
+  memory_size: 50
+  reasoning_depth: "medium"  # low, medium, high
+
+evaluation:
+  enable_evaluation: true
+  metrics:
+    - win_rate
+    - survival_rate
+    - accuracy
+    - contribution_score
+
+evolution:
+  enable_evolution: false
+  num_generations: 10
+  mutation_rate: 0.1
