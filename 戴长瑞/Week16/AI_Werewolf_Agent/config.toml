@@ -1,0 +1,19 @@
+[llm]
+# LLM 提供商: mock | claude | openai
+provider = "mock"
+
+# Claude API 配置
+api_key = ""
+model = "claude-sonnet-4-20250514"
+max_tokens = 512
+temperature = 0.7
+
+# OpenAI API 配置（备用）
+# openai_api_key = ""
+# openai_model = "gpt-4o"
+# openai_base_url = ""
+
+[game]
+# 模拟模式: smart | simple
+mode = "smart"
+max_days = 15
